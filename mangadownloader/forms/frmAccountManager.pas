@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, Buttons,
   ExtCtrls, VirtualTrees, accountmanagerdb, WebsiteModules,
-  FMDOptions, HTTPSendThread, frmAccountSet, SimpleException;
+  FMDOptions, HTTPSendThread, BaseThread, frmAccountSet, SimpleException;
 
 type
 
@@ -58,7 +58,7 @@ type
 
   { TAccountCheckThread }
 
-  TAccountCheckThread = class(THTTPThread)
+  TAccountCheckThread = class(TBaseThread)
   private
     fwebsite: String;
     fhttp: THTTPSendThread;
@@ -98,7 +98,7 @@ resourcestring
 
 implementation
 
-uses frmMain;
+uses frmMain, frmCustomColor;
 
 var
   Websites, WebsitesAvailable: TStringlist;
@@ -340,10 +340,12 @@ begin
     Websites.Sorted := True;
   end;
   LoadForm;
+  AddVT(vtAccountList);
 end;
 
 procedure TAccountManagerForm.FormDestroy(Sender: TObject);
 begin
+  RemoveVT(vtAccountList);
   if Assigned(Websites) then Websites.Free;
   if Assigned(WebsitesAvailable) then WebsitesAvailable.Free;
   if Assigned(AccountThreadList) then AccountThreadList.Free;

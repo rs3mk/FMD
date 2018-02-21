@@ -40,7 +40,7 @@ resourcestring
     '2400x' + LineEnding +
     'Original';
 
-function ExHentaiLogin(const AHTTP: THTTPSendThread): Boolean;
+function ExHentaiLogin(const AHTTP: THTTPSendThread; const Module: TModuleContainer): Boolean;
 var
   s: String;
 begin
@@ -81,20 +81,23 @@ begin
   end;
 end;
 
-function GETWithLogin(const AHTTP: THTTPSendThread; const AURL, AWebsite: String): Boolean;
+function GETWithLogin(const AHTTP: THTTPSendThread; const AURL: String; const Module: TModuleContainer): Boolean;
 var
   ACookies: String;
 begin
   Result := False;
   if Account.Enabled[accname] then begin
     AHTTP.FollowRedirection := False;
-    if AHTTP.Cookies.Count > 0 then ACookies := AHTTP.Cookies.Text
-    else ACookies := '';
-    //AHTTP.Cookies.Text := Account.Cookies[accname];
+    // force no warning
+    AHTTP.Cookies.Values['nw'] := '1';
+    if AHTTP.Cookies.Count > 0 then
+      ACookies := AHTTP.Cookies.Text
+    else
+      ACookies := '';
     AHTTP.Cookies.AddText(Account.Cookies[accname]);
     Result := AHTTP.GET(AURL);
     if Result and (AHTTP.ResultCode > 300) then begin
-      Result := ExHentaiLogin(AHTTP);
+      Result := ExHentaiLogin(AHTTP, Module);
       if Result then
       begin
         if ACookies <> '' then AHTTP.Cookies.AddText(ACookies);
@@ -107,14 +110,14 @@ begin
 end;
 
 function GetDirectoryPageNumber(const MangaInfo: TMangaInformation;
-  var Page: Integer; const Module: TModuleContainer): Integer;
+  var Page: Integer; const WorkPtr: Integer; const Module: TModuleContainer): Integer;
 var
   query: TXQueryEngineHTML;
 begin
   Result := NET_PROBLEM;
   Page := 1;
   if MangaInfo = nil then Exit(UNKNOWN_ERROR);
-  if GETWithLogin(MangaInfo.FHTTP, Module.RootURL + '/?' + dirURL, Module.Website) then begin
+  if GETWithLogin(MangaInfo.FHTTP, Module.RootURL + '/?' + dirURL, Module) then begin
     Result := NO_ERROR;
     query := TXQueryEngineHTML.Create;
     try
@@ -138,7 +141,7 @@ begin
   if MangaInfo = nil then Exit(UNKNOWN_ERROR);
   if AURL = '0' then rurl := Module.RootURL + '/?' + dirURL
   else rurl := Module.RootURL + '/?page=' + IncStr(AURL) + '&' + dirURL;
-  if GETWithLogin(MangaInfo.FHTTP, rurl, Module.Website) then begin
+  if GETWithLogin(MangaInfo.FHTTP, rurl, Module) then begin
     Result := NO_ERROR;
     query := TXQueryEngineHTML.Create;
     try
@@ -161,54 +164,41 @@ var
   v: IXQValue;
 
   procedure ScanParse;
-  var
-    getOK: Boolean;
   begin
-    getOK := True;
-    // check content warning
-    if Pos('Content Warning', query.XPathString('//div/h1')) > 0 then
-    begin
-      getOK := GETWithLogin(MangaInfo.FHTTP, MangaInfo.mangaInfo.url + '?nw=session', Module.Website);
-      if getOK then
-        query.ParseHTML(StreamToString(MangaInfo.FHTTP.Document));
-    end;
-    if getOK then
-    begin
-      with MangaInfo.mangaInfo do begin
-        //title
-        title := Query.XPathString('//*[@id="gn"]');
-        //cover
-        coverLink := Query.XPathString('//*[@id="gd1"]/img/@src');
-        //artists
-        artists := '';
-        for v in Query.XPath('//a[starts-with(@id,"ta_artist")]') do
-          AddCommaString(artists, v.toString);
-        //genres
-        genres := '';
-        for v in Query.XPath(
-            '//a[starts-with(@id,"ta_")and(not(starts-with(@id,"ta_artist")))]') do
-          AddCommaString(genres, v.toString);
-        //chapter
-        if title <> '' then begin
-          chapterLinks.Add(url);
-          chapterName.Add(title);
-        end;
-        //status
-        with TRegExpr.Create do
-          try
-            Expression := '(?i)[\[\(\{](wip|ongoing)[\]\)\}]';
-            if Exec(title) then
-              status := '1'
-            else
-            begin
-              Expression := '(?i)[\[\(\{]completed[\]\)\}]';
-              if Exec(title) then
-                status := '0';
-            end;
-          finally
-            Free;
-          end;
+    with MangaInfo.mangaInfo do begin
+      //title
+      title := Query.XPathString('//*[@id="gn"]');
+      //cover
+      coverLink := Query.XPathString('//*[@id="gd1"]/img/@src');
+      //artists
+      artists := '';
+      for v in Query.XPath('//a[starts-with(@id,"ta_artist")]') do
+        AddCommaString(artists, v.toString);
+      //genres
+      genres := '';
+      for v in Query.XPath(
+          '//a[starts-with(@id,"ta_")and(not(starts-with(@id,"ta_artist")))]') do
+        AddCommaString(genres, v.toString);
+      //chapter
+      if title <> '' then begin
+        chapterLinks.Add(url);
+        chapterName.Add(title);
       end;
+      //status
+      with TRegExpr.Create do
+        try
+          Expression := '(?i)[\[\(\{](wip|ongoing)[\]\)\}]';
+          if Exec(title) then
+            status := '1'
+          else
+          begin
+            Expression := '(?i)[\[\(\{]completed[\]\)\}]';
+            if Exec(title) then
+              status := '0';
+          end;
+        finally
+          Free;
+        end;
     end;
   end;
 
@@ -219,7 +209,7 @@ begin
     website := Module.Website;
     url := ReplaceRegExpr('/\?\w+.*$', AURL, '/', False);
     url := AppendURLDelim(FillHost(Module.RootURL, url));
-    if GETWithLogin(MangaInfo.FHTTP, url, Module.Website) then begin
+    if GETWithLogin(MangaInfo.FHTTP, url, Module) then begin
       Result := NO_ERROR;
       // if there is only 1 line, it's banned message!
       //if Source.Count = 1 then
@@ -271,14 +261,14 @@ begin
     PageNumber := 0;
     rurl := ReplaceRegExpr('/\?\w+.*$', AURL, '/', False);
     rurl := AppendURLDelim(FillHost(Module.RootURL, rurl));
-    if GETWithLogin(DownloadThread.FHTTP, rurl, Module.Website) then begin
+    if GETWithLogin(DownloadThread.FHTTP, rurl, Module) then begin
       Result := True;
       query := TXQueryEngineHTML.Create;
       try
         getOK := True;
         //check content warning
         if Pos('Content Warning', query.XPathString('//div/h1')) > 0 then
-          getOK := GETWithLogin(DownloadThread.FHTTP, rurl + '?nw=session', Module.Website);
+          getOK := GETWithLogin(DownloadThread.FHTTP, rurl + '?nw=session', Module);
         if getOK then begin
           GetImageLink;
           //get page count
@@ -288,7 +278,7 @@ begin
             for i := 1 to p do
             begin
               if DownloadThread.IsTerminated then Break;
-              if GETWithLogin(DownloadThread.FHTTP, rurl + '?p=' + IntToStr(i), Module.Website) then
+              if GETWithLogin(DownloadThread.FHTTP, rurl + '?p=' + IntToStr(i), Module) then
                 GetImageLink;
             end;
           end;
@@ -311,7 +301,7 @@ begin
 end;
 
 function DownloadImage(const DownloadThread: TDownloadThread;
-  const AURL, APath, AName: String; const Module: TModuleContainer): Boolean;
+  const AURL: String; const Module: TModuleContainer): Boolean;
 var
   query: TXQueryEngineHTML;
   iurl: String;
@@ -336,7 +326,7 @@ var
       if iurl = '' then
         iurl := query.XPathString('//a/img/@src[not(contains(.,"ehgt.org/"))]');
       if iurl <> '' then
-        Result := SaveImage(DownloadThread.FHTTP, iurl, APath, AName);
+        Result := GETWithLogin(DownloadThread.FHTTP, iurl, Module);
       if DownloadThread.IsTerminated then Break;
       if rcount >= reconnect then Break;
       if not Result then begin
@@ -386,7 +376,7 @@ var
             nls := nls + '&nl=' + nl;
           iurl := iurl + nls;
         end;
-        if not GETWithLogin(DownloadThread.FHTTP, iurl, Module.Website) then Break;
+        if not GETWithLogin(DownloadThread.FHTTP, iurl, Module) then Break;
         Inc(rcount);
       end;
     end;
@@ -399,7 +389,7 @@ begin
   iurl := FillHost(Module.RootURL, AURL);
   if settingsimagesize <= High(settingsimagesizestr) then
     DownloadThread.FHTTP.Cookies.Values['uconfig'] := settingsimagesizestr[settingsimagesize];
-  if GETWithLogin(DownloadThread.FHTTP, iurl, Module.Website) then begin
+  if GETWithLogin(DownloadThread.FHTTP, iurl, Module) then begin
     query := TXQueryEngineHTML.Create(DownloadThread.FHTTP.Document);
     try
       Result := DoDownloadImage;
@@ -417,8 +407,9 @@ procedure RegisterModule;
     with Result do begin
       Website := AWebsite;
       RootURL := ARootURL;
-      MaxTaskLimit := 1;
-      MaxConnectionLimit := 4;
+      Category := 'H-Sites';
+      Settings.MaxTaskLimit := 1;
+      Settings.MaxConnectionLimit := 2;
       SortedList := True;
       DynamicPageLink := True;
       OnGetDirectoryPageNumber := @GetDirectoryPageNumber;
@@ -430,7 +421,7 @@ procedure RegisterModule;
   end;
 
 begin
-  with AddWebsiteModule('E-Hentai', 'http://g.e-hentai.org') do
+  with AddWebsiteModule('E-Hentai', 'https://e-hentai.org') do
     AddOptionComboBox(@settingsimagesize, 'SettingsImageSize', @RS_SettingsImageSize, @RS_SettingsImageSizeItems);
   with AddWebsiteModule('ExHentai', 'http://exhentai.org') do begin
     AccountSupport := True;

@@ -41,6 +41,7 @@ type
     vtUpdateListNumberOfThreads: TVirtualStringTree;
     vtUserAgent: TVirtualStringTree;
     procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
     procedure MenuItem1Click(Sender: TObject);
     procedure MenuItem2Click(Sender: TObject);
     procedure MenuItem4Click(Sender: TObject);
@@ -55,15 +56,19 @@ type
       var NodeDataSize: Integer);
     procedure vtCookiesGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; TextType: TVSTTextType; var CellText: String);
+    {$if VTMajorVersion < 5}
     procedure vtCookiesHeaderClick(Sender: TVTHeader; Column: TColumnIndex;
       Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    {$else}
+    procedure vtCookiesHeaderClick(Sender: TVTHeader; HitInfo: TVTHeaderHitInfo);
+    {$endif}
     procedure vtCookiesKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure vtCookiesNewText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; const NewText: String);
   private
     { private declarations }
-    procedure LoadFromFileToVT(const AVT: TVirtualStringTree; const ASection: String);
-    procedure GetWebsite(const AVT: TVirtualStringTree; const S: TStrings);
+    procedure LoadFromFileToVT(const AVT: VirtualTrees.TVirtualStringTree; const ASection: String);
+    procedure GetWebsite(const AVT: VirtualTrees.TVirtualStringTree; const S: TStrings);
   public
     { public declarations }
   end;
@@ -73,12 +78,19 @@ var
 
 implementation
 
+uses frmCustomColor;
+
 {$R *.lfm}
 
 { TWebsiteOptionAdvancedForm }
 
 procedure TWebsiteOptionAdvancedForm.FormCreate(Sender: TObject);
 begin
+  AddVT(vtCookies);
+  AddVT(vtUserAgent);
+  AddVT(vtDownloadMaxThreadsPerTask);
+  AddVT(vtUpdateListDirectoryPageNumber);
+  AddVT(vtUpdateListNumberOfThreads);
   LoadFromFileToVT(vtCookies, 'Cookies');
   LoadFromFileToVT(vtUserAgent, 'UserAgent');
   LoadFromFileToVT(vtDownloadMaxThreadsPerTask, 'DownloadMaxThreadsPerTask');
@@ -86,17 +98,26 @@ begin
   LoadFromFileToVT(vtUpdateListNumberOfThreads, 'UpdateListNumberOfThreads');
 end;
 
+procedure TWebsiteOptionAdvancedForm.FormDestroy(Sender: TObject);
+begin
+  RemoveVT(vtCookies);
+  RemoveVT(vtUserAgent);
+  RemoveVT(vtDownloadMaxThreadsPerTask);
+  RemoveVT(vtUpdateListDirectoryPageNumber);
+  RemoveVT(vtUpdateListNumberOfThreads);
+end;
+
 procedure TWebsiteOptionAdvancedForm.MenuItem1Click(Sender: TObject);
 var
   Data: PNameValue;
   Node: PVirtualNode;
 begin
-  if Screen.ActiveControl is TVirtualStringTree then
+  if Screen.ActiveControl is VirtualTrees.TVirtualStringTree then
     with TWebsiteSelectionForm.Create(Self) do
       try
-        GetWebsite(TVirtualStringTree(Screen.ActiveControl), cbWebsites.Items);
+        GetWebsite(VirtualTrees.TVirtualStringTree(Screen.ActiveControl), cbWebsites.Items);
         if (ShowModal = mrOk) and (cbWebsites.Text <> '') then
-          with TVirtualStringTree(Screen.ActiveControl) do
+          with VirtualTrees.TVirtualStringTree(Screen.ActiveControl) do
           begin
             Node := AddChild(nil);
             Data := GetNodeData(Node);
@@ -111,8 +132,8 @@ end;
 
 procedure TWebsiteOptionAdvancedForm.MenuItem2Click(Sender: TObject);
 begin
-  if Screen.ActiveControl is TVirtualStringTree then
-    with TVirtualStringTree(Screen.ActiveControl) do
+  if Screen.ActiveControl is VirtualTrees.TVirtualStringTree then
+    with VirtualTrees.TVirtualStringTree(Screen.ActiveControl) do
       EditNode(FocusedNode, 1);
 end;
 
@@ -120,8 +141,8 @@ procedure TWebsiteOptionAdvancedForm.MenuItem4Click(Sender: TObject);
 var
   Data: PNameValue;
 begin
-  if Screen.ActiveControl is TVirtualStringTree then
-    with TVirtualStringTree(Screen.ActiveControl) do
+  if Screen.ActiveControl is VirtualTrees.TVirtualStringTree then
+    with VirtualTrees.TVirtualStringTree(Screen.ActiveControl) do
     begin
       Data := GetNodeData(FocusedNode);
       advancedfile.DeleteKey(DefaultText, Data^.Name);
@@ -183,9 +204,19 @@ begin
   end;
 end;
 
+{$if VTMajorVersion < 5}
 procedure TWebsiteOptionAdvancedForm.vtCookiesHeaderClick(Sender: TVTHeader;
-  Column: TColumnIndex; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+  Column: TColumnIndex; Button: TMouseButton; Shift: TShiftState; X, Y: Integer
+  );
+{$else}
+procedure TWebsiteOptionAdvancedForm.vtCookiesHeaderClick(Sender: TVTHeader; HitInfo: TVTHeaderHitInfo);
+var
+  Column: TColumnIndex;
+{$endif}
 begin
+  {$if VTMajorVersion >= 5}
+  Column := HitInfo.Column;
+  {$endif}
   Sender.SortColumn := Column;
   if Sender.SortDirection = sdAscending then
     Sender.SortDirection := sdDescending
@@ -197,8 +228,8 @@ end;
 procedure TWebsiteOptionAdvancedForm.vtCookiesKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-  if not (Sender is TVirtualStringTree) then Exit;
-  with TVirtualStringTree(Sender) do
+  if not (Sender is VirtualTrees.TVirtualStringTree) then Exit;
+  with VirtualTrees.TVirtualStringTree(Sender) do
     if (Key = VK_RETURN) and (FocusedColumn <> 0) then
       EditNode(FocusedNode, FocusedColumn);
 end;
@@ -213,12 +244,11 @@ begin
   if Data^.Value <> NewText then
   begin
     Data^.Value := NewText;
-    advancedfile.WriteString(TVirtualStringTree(Sender).DefaultText, Data^.Name, NewText);
+    advancedfile.WriteString(VirtualTrees.TVirtualStringTree(Sender).DefaultText, Data^.Name, NewText);
   end;
 end;
 
-procedure TWebsiteOptionAdvancedForm.LoadFromFileToVT(const AVT: TVirtualStringTree;
-  const ASection: String);
+procedure TWebsiteOptionAdvancedForm.LoadFromFileToVT(const AVT: VirtualTrees.TVirtualStringTree; const ASection: String);
 var
   s: TStringList;
   i: Integer;
@@ -256,36 +286,23 @@ begin
   end;
 end;
 
-procedure TWebsiteOptionAdvancedForm.GetWebsite(const AVT: TVirtualStringTree;
-  const S: TStrings);
+procedure TWebsiteOptionAdvancedForm.GetWebsite(const AVT: VirtualTrees.TVirtualStringTree; const S: TStrings);
 var
-  Data: PNameValue;
   Node: PVirtualNode;
-  i, p: Integer;
+  p: Integer;
 begin
   if AVT = nil then Exit;
   if S = nil then Exit;
-  S.Clear;
-  if AvailableWebsite.Count > 0 then
+  s.Assign(AvailableWebsites);
+  if s.Count <> 0 then
   begin
-    S.BeginUpdate;
-    try
-      for i := 0 to AvailableWebsite.Count - 1 do
-        S.Add(AvailableWebsite.Names[i]);
-      if AVT.RootNodeCount > 0 then
-      begin
-        Node := AVT.GetFirst();
-        while Assigned(Node) do
-        begin
-          Data := AVT.GetNodeData(Node);
-          p := S.IndexOf(Data^.Name);
-          if p > -1 then
-            S.Delete(p);
-          Node := AVT.GetNext(Node);
-        end;
-      end;
-    finally
-      S.EndUpdate;
+    Node := AVT.GetFirst();
+    while Node <> nil do
+    begin
+      p := s.IndexOf(PNameValue(AVT.GetNodeData(Node))^.Name);
+      if p <> - 1 then
+        s.Delete(p);
+      Node := AVT.GetNext(Node);
     end;
   end;
 end;
