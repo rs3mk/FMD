@@ -451,4 +451,5 @@ function Init()
 	cat = 'Spanish'
 	AddWebsiteModule('22c481c279c740b897ffc906ab808502', 'TuMangaNet', 'https://tumanga.net')
 	AddWebsiteModule('89caa2c18f5b40e6a18b7ecc78a0d1c1', 'TopComicPorno', 'https://topcomicporno.com')
+	AddWebsiteModule('36b0f19e144a4642a2839ec9cb728c3a', 'RagnarokScan', 'https://ragnarokscan.com')
 end
