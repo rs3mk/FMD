@@ -395,6 +395,7 @@ function Init()
 	AddWebsiteModule('61e0a07a01ea45cf8909a2cfc5442659', 'SenpaiEdiciones', 'https://senpaiediciones.com')
 	AddWebsiteModule('ad851ecfe6824a01a30625b58d105de8', 'Ikifang', 'https://ikimei.com')
 	AddWebsiteModule('b015f20e82d44b268928124cc2c1a4b0', 'MartialManga', 'https://martialmanga.com')
+	AddWebsiteModule('7872813350a44e11a301816c2911c87a', 'SDLScans', 'https://sdlscans.com')
 
 	cat = 'English'
 	AddWebsiteModule('421be2f0d918493e94f745c71090f359', 'Mangafast', 'https://mangafast.net')
