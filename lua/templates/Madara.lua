@@ -44,13 +44,13 @@ function _M.GetInfo()
 	if not HTTP.GET(u) then return net_problem end
 
 	x = CreateTXQuery(HTTP.Document)
-	MANGAINFO.Title     = x.XPathString('//div[@class="post-title" or @id="manga-title"]/*[self::h1 or self::h3]/text()')
+	MANGAINFO.Title     = x.XPathString('//div[@class="post-title" or @id="manga-title"]/*[self::h1 or self::h3]/text() | //h1/text()')
 	MANGAINFO.AltTitles = x.XPathString('//div[@class="summary-heading" and ./h5="Alternative" or ./h5="Judul Lain"]/following-sibling::div')
 	MANGAINFO.CoverLink = x.XPathString('//div[@class="summary_image"]//img/@data-src')
 	MANGAINFO.Authors   = x.XPathStringAll('//div[@class="author-content"]/a')
 	MANGAINFO.Artists   = x.XPathStringAll('//div[@class="artist-content"]/a')
 	MANGAINFO.Genres    = x.XPathStringAll('//div[@class="genres-content"]/a')
-	MANGAINFO.Status    = MangaInfoStatusIfPos(x.XPathString('//div[@class="summary-heading" and contains(., "' .. XPathTokenStatus .. '")]/following-sibling::div'), 'Berjalan|Ongoing|مستمرة|Em Andamento', 'Tamat|Completed|مكتملة|Concluído', 'Hiatus|On Hold|متوقفة|Em espera', 'Diberhentikan|Canceled|مُلغَاة|Cancelado')
+	MANGAINFO.Status    = MangaInfoStatusIfPos(x.XPathString('//div[@class="summary-heading" and contains(., "' .. XPathTokenStatus .. '")]/following-sibling::div'), 'Berjalan|Ongoing|مستمرة', 'Tamat|Completed|مكتملة', 'Hiatus|On Hold|متوقفة', 'Diberhentikan|Canceled|مُلغَاة')
 	MANGAINFO.Summary   = x.XPathString('string-join(//div[contains(@class, "summary__content") or @class="manga-summary"]|//div[@class="manga-excerpt"]|//div[@class="post-content_item" and contains(h5, "Summary") or contains(h5, "Sinopsis")]//p, "\r\n")')
 
 	if MANGAINFO.CoverLink == '' then MANGAINFO.CoverLink = x.XPathString('//div[@class="summary_image"]//img/@src') end
@@ -82,6 +82,12 @@ function _M.GetInfo()
 			CreateTXQuery(HTTP.Document).XPathHREFAll('//li[contains(@class, "wp-manga-chapter")]/a[not(@href="#")]', MANGAINFO.ChapterLinks, MANGAINFO.ChapterNames)
 		end
 	end
+	if MANGAINFO.ChapterLinks.Count == 0 then
+		local v for v in x.XPath('//li[contains(@class, "has-thumb")]').Get() do
+			MANGAINFO.ChapterLinks.Add(x.XPathString('a/@href', v))
+			MANGAINFO.ChapterNames.Add(x.XPathString('a//span/text()[normalize-space()]', v))
+		end	
+	end	
 	MANGAINFO.ChapterLinks.Reverse(); MANGAINFO.ChapterNames.Reverse()
 
 	return no_error
@@ -93,7 +99,7 @@ function _M.GetPageNumber()
 	local u = MaybeFillHost(MODULE.RootURL, URL)
 	if string.find(u, 'style=list', 1, true) == nil then u = string.gsub(u, '?style=paged', '') .. '?style=list' end
 
-	if not HTTP.GET(u) then return false end
+	if not HTTP.GET(u) then return net_problem end
 
 	x = CreateTXQuery(HTTP.Document)
 	x.XPathStringAll('//div[contains(@class, "page-break")]/img/@data-src', TASK.PageLinks)
@@ -129,11 +135,11 @@ function _M.GetPageNumber()
 		end
 	end
 	for i = 0, TASK.PageLinks.Count - 1 do
-		TASK.PageLinks[i] = TASK.PageLinks[i]:gsub('i%d.wp.com/', ''):gsub('cdn.statically.io/img/', '')
+		TASK.PageLinks[i] = TASK.PageLinks[i]:gsub("i%d.wp.com/", "")
 		i = i + 1
 	end
 
-	return true
+	return no_error
 end
 
 ----------------------------------------------------------------------------------------------------
