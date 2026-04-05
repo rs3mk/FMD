@@ -67,9 +67,26 @@ end
 
 -- Get the page count for the current chapter.
 function GetPageNumber()
-	Template.GetPageNumber()
+    local u = MaybeFillHost(MODULE.RootURL, URL)
 
-	return no_error
+    if not HTTP.GET(u) then return net_problem end
+
+    local x = CreateTXQuery(HTTP.Document)
+    
+    local v for v in x.XPath('//div[@id="all"]//img').Get() do
+        local src = v.GetAttribute('data-src')
+
+        if src == '' then
+            src = v.GetAttribute('src')
+        end
+
+        -- skip gifs placeholder
+        if src ~= '' and not src:find('data:image') and not src:find('subads') then
+            TASK.PageLinks.Add(src)
+        end
+    end
+
+    return no_error
 end
 
 function BeforeDownloadImage()
